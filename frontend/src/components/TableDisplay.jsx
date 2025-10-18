@@ -201,15 +201,7 @@ function TableDisplay({ extractedData }) {
         ))}
       </div>
 
-      {/* Powered by indicator */}
-      <div className="text-center mt-8">
-        <div className="inline-flex items-center gap-3 bg-gradient-to-r from-green-50 to-emerald-50 px-6 py-3 rounded-full shadow-md border-2 border-green-200">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <p className="text-sm font-semibold text-gray-700">
-            Extracted by <span className="font-black bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">Gemini 2.5 Pro</span>
-          </p>
-        </div>
-      </div>
+
     </div>
   );
 }

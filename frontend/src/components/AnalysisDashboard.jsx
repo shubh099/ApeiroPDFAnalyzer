@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 
 function FindingCard({ finding, onGetClarification, clarification, loadingClarification }) {
   const severityColors = {
@@ -50,9 +51,18 @@ function FindingCard({ finding, onGetClarification, clarification, loadingClarif
       <button
         onClick={() => onGetClarification(finding)}
         disabled={loadingClarification || clarification}
-        className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+        className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 transition-all"
       >
-        {loadingClarification ? "Searching..." : clarification ? "✓ Clarification Found" : "Get Clarifications"}
+        {loadingClarification ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Searching for clarifications...
+          </>
+        ) : clarification ? (
+          <>✓ Clarification Found</>
+        ) : (
+          <>Get Clarifications</>
+        )}
       </button>
       
       {clarification && (
@@ -70,9 +80,13 @@ function FindingCard({ finding, onGetClarification, clarification, loadingClarif
   );
 }
 
-export default function AnalysisDashboard({ contradictions, gaps, extractedData }) {
+export default function AnalysisDashboard({ contradictions, gaps, extractedData, activeFilter }) {
   const [clarifications, setClarifications] = useState({});
   const [loading, setLoading] = useState({});
+
+  // Determine what to show based on filter
+  const shouldShowContradictions = !activeFilter || activeFilter === 'contradictions';
+  const shouldShowGaps = !activeFilter || activeFilter === 'gaps';
 
   const handleGetClarification = async (finding, key) => {
     setLoading(prev => ({ ...prev, [key]: true }));
@@ -106,7 +120,7 @@ export default function AnalysisDashboard({ contradictions, gaps, extractedData 
 
   return (
     <div className="mt-12">
-      {contradictions && contradictions.length > 0 && (
+      {shouldShowContradictions && contradictions && contradictions.length > 0 && (
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-red-600 mb-4">
             Contradictions Found ({contradictions.length})
@@ -123,7 +137,7 @@ export default function AnalysisDashboard({ contradictions, gaps, extractedData 
         </div>
       )}
 
-      {gaps && gaps.length > 0 && (
+      {shouldShowGaps && gaps && gaps.length > 0 && (
         <div>
           <h2 className="text-2xl font-bold text-yellow-600 mb-4">
             Gaps Found ({gaps.length})
@@ -140,7 +154,7 @@ export default function AnalysisDashboard({ contradictions, gaps, extractedData 
         </div>
       )}
 
-      {(!contradictions || contradictions.length === 0) && 
+      {(!contradictions || contradictions.length === 0) &&
        (!gaps || gaps.length === 0) && (
         <div className="text-center text-gray-500 py-12">
           <p className="text-lg">No issues found. The document appears to be consistent.</p>

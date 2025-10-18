@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(dotenv_path=Path('..') / '.env')
 
 # Configure Gemini API
 api_key = os.getenv("GEMINI_API_KEY")
@@ -26,23 +26,18 @@ EXTRACTION_PROMPT = """You will be given a PDF document containing benefit packa
 
 **Instructions:**
 
-1.  **Document Context (REQUIRED - Add this first):**
-    * At the start of your JSON, add a "document_context" field
-    * Extract 2-3 lines identifying: Country, Health system/ministry name, Act/legislation name, year/date
-    * Example: "document_context": "Kenya Ministry of Health, Social Health Insurance Act 2023, Benefit Package Guidelines"
+1.  **Extraction Schema:** The tables you must extract follow a specific nested structure:
+    * They are grouped under **major headings** (e.g., \"PRIMARY HEALTHCARE FUND\", \"SOCIAL HEALTH INSURANCE FUND\"). These will be the parent topics.
+    * Within each major heading, there are **sub-topic tables** (e.g., \"OUTPATIENT CARE SERVICES\", \"RENAL CARE PACKAGE\").
+    * These sub-topic tables always have four columns: \"Scope\", \"Access Point\", \"Tariff\", and \"Access Rules\".
 
-2.  **Extraction Schema:** The tables you must extract follow a specific nested structure:
-    * They are grouped under **major headings** (e.g., "PRIMARY HEALTHCARE FUND", "SOCIAL HEALTH INSURANCE FUND"). These will be the parent topics.
-    * Within each major heading, there are **sub-topic tables** (e.g., "OUTPATIENT CARE SERVICES", "RENAL CARE PACKAGE").
-    * These sub-topic tables always have four columns: "Scope", "Access Point", "Tariff", and "Access Rules".
+2.  **Exclusion Rule (Crucial):**
+    * You **MUST STOP** processing when you reach the heading \"ANNEX 1 - SURGICAL PACKAGE\".
+    * Do **NOT** include any data from \"ANNEX 1\" or any content that follows it.
 
-3.  **Exclusion Rule (Crucial):**
-    * You **MUST STOP** processing when you reach the heading "ANNEX 1 - SURGICAL PACKAGE".
-    * Do **NOT** include any data from "ANNEX 1" or any content that follows it.
-
-4.  **JSON Format:**
+3.  **JSON Format:**
     * The final output MUST be a single JSON object.
-    * The structure must be: `{"document_context": "...", "PARENT_TOPIC": [{"CHILD_SUBTOPIC": {"Scope": [], "Access Point": [], "Tariff": [], "Access Rules": []}}]}`
+    * The structure must be: `{\"PARENT_TOPIC\": [{\"CHILD_SUBTOPIC\": {\"Scope\": [], \"Access Point\": [], \"Tariff\": [], \"Access Rules\": []}}]}`
     * Collect all text from a single cell into one string, even if it has multiple lines.
 
 Do not include any other text or explanations in your response outside of the final, valid JSON object.
@@ -51,47 +46,46 @@ Do not include any other text or explanations in your response outside of the fi
 
 ```json
 {
-  "document_context": "Kenya Ministry of Health, Social Health Insurance Act 2023, Benefit Package Guidelines",
-  "PRIMARY HEALTHCARE FUND": [
+  \"PRIMARY HEALTHCARE FUND\": [
     {
-      "OUTPATIENT CARE SERVICES": {
-        "Scope": ["data...", "data..."],
-        "Access Point": ["data..."],
-        "Tariff": ["data...", "data..."],
-        "Access Rules": ["data...", "data..."]
+      \"OUTPATIENT CARE SERVICES\": {
+        \"Scope\": [\"data...\", \"data...\"],
+        \"Access Point\": [\"data...\"],
+        \"Tariff\": [\"data...\", \"data...\"],
+        \"Access Rules\": [\"data...\", \"data...\"]
       }
     },
     {
-      "MATERNITY, NEWBORN AND CHILD HEALTH SERVICES": {
-        "Scope": ["data..."],
-        "Access Point": ["data..."],
-        "Tariff": ["data..."],
-        "Access Rules": ["data..."]
+      \"MATERNITY, NEWBORN AND CHILD HEALTH SERVICES\": {
+        \"Scope\": [\"data...\"],
+        \"Access Point\": [\"data...\"],
+        \"Tariff\": [\"data...\"],
+        \"Access Rules\": [\"data...\"]
       }
     }
   ],
-  "SOCIAL HEALTH INSURANCE FUND": [
+  \"SOCIAL HEALTH INSURANCE FUND\": [
     {
-      "OUTPATIENT CARE SERVICES": {
-        "Scope": ["data..."],
-        "Access Point": ["data..."],
-        "Tariff": ["data..."],
-        "Access Rules": ["data..."]
+      \"OUTPATIENT CARE SERVICES\": {
+        \"Scope\": [\"data...\"],
+        \"Access Point\": [\"data...\"],
+        \"Tariff\": [\"data...\"],
+        \"Access Rules\": [\"data...\"]
       }
     }
   ],
-  "EMERGENCY, CHRONIC AND CRITICAL ILLNESS FUND": [
+  \"EMERGENCY, CHRONIC AND CRITICAL ILLNESS FUND\": [
     {
-      "AMBULANCE EVACUATION SERVICES": {
-        "Scope": ["data..."],
-        "Access Point": ["data..."],
-        "Tariff": ["data..."],
-        "Access Rules": ["data..."]
+      \"AMBULANCE EVACUATION SERVICES\": {
+        \"Scope\": [\"data...\"],
+        \"Access Point\": [\"data...\"],
+        \"Tariff\": [\"data...\"],
+        \"Access Rules\": [\"data...\"]
       }
     }
   ]
 }
-```"""
+```"""  # noqa: E501
 
 def extract_tables_with_gemini(pdf_path: str) -> Dict[str, Any]:
     """
@@ -190,13 +184,12 @@ def extract_tables_with_gemini(pdf_path: str) -> Dict[str, Any]:
         logger.error(f"\n❌ Gemini Extraction Error: {e}")
         raise Exception(f"Failed to extract tables with Gemini: {e}")
 
-def transform_gemini_output_to_frontend_format(gemini_data: Dict[str, Any]) -> Dict[str, Any]:
+def transform_gemini_output_to_frontend_format(gemini_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Transform Gemini's JSON output to the format expected by the frontend.
 
     Gemini format:
     {
-      "document_context": "Kenya Ministry of Health, Social Health Insurance Act 2023...",
       "PRIMARY HEALTHCARE FUND": [
         {
           "OUTPATIENT CARE SERVICES": {
@@ -215,32 +208,34 @@ def transform_gemini_output_to_frontend_format(gemini_data: Dict[str, Any]) -> D
     }
 
     Frontend format:
-    {
-      "document_context": "Kenya Ministry of Health, Social Health Insurance Act 2023...",
-      "tables": [
-        {
-          "fund": "PRIMARY HEALTHCARE FUND",
-          "category": "OUTPATIENT CARE SERVICES",
-          "headers": ["Scope", "Access Point", "Tariff", "Access Rules"],
-          "rows": [
-            ["data1", "data1", "data1", "data1"],
-            ["data2", "data2", "data2", "data2"]
-          ]
-        }
-      ]
-    }
+    [
+      {
+        "fund": "PRIMARY HEALTHCARE FUND",
+        "category": "OUTPATIENT CARE SERVICES",
+        "headers": ["Scope", "Access Point", "Tariff", "Access Rules"],
+        "rows": [
+          ["data1", "data1", "data1", "data1"],
+          ["data2", "data2", "data2", "data2"]
+        ]
+      },
+      {
+        "fund": "ANNEX 1 - SURGICAL PACKAGE",
+        "category": "ANNEX 1 - SURGICAL PACKAGE",
+        "headers": ["Specialty", "Intervention", "Tariff"],
+        "rows": [
+          ["data1", "data1", "data1"],
+          ["data2", "data2", "data2"]
+        ]
+      }
+    ]
     """
     logger.info("\n{'='*60}")
     logger.info("Transforming Gemini output to frontend format")
     logger.info(f"{'='*60}\n")
 
     transformed_tables = []
-    document_context = gemini_data.get("document_context", "Unknown healthcare document")
 
     for key, value in gemini_data.items():
-        # Skip the document_context field
-        if key == "document_context":
-            continue
         # Case 1: Main Benefit Tables (list of subtopics)
         if isinstance(value, list):
             fund = key
@@ -300,11 +295,10 @@ def transform_gemini_output_to_frontend_format(gemini_data: Dict[str, Any]) -> D
 
     logger.info(f"\n{'='*60}")
     logger.info(f"Transformation complete: {len(transformed_tables)} tables created")
-    logger.info(f"Document context: {document_context}")
     logger.info(f"{'='*60}\n")
 
     return {
-        "document_context": document_context,
+        "document_context": gemini_data.get("document_context", ""),
         "tables": transformed_tables
     }
 
@@ -319,16 +313,12 @@ def extract_tables_from_pdf(pdf_path: str) -> Dict[str, Any]:
         pdf_path: Path to the PDF file
 
     Returns:
-        Dict with document_context and tables:
-        {
-            "document_context": "Kenya Ministry of Health...",
-            "tables": [...]
-        }
+        A dictionary containing the document context and the list of tables.
     """
     # Step 1: Extract with Gemini
     gemini_data = extract_tables_with_gemini(pdf_path)
 
-    # Step 2: Transform to frontend format (includes document_context)
+    # Step 2: Transform to frontend format
     frontend_data = transform_gemini_output_to_frontend_format(gemini_data)
 
     return frontend_data

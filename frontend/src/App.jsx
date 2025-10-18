@@ -20,26 +20,39 @@ function App() {
   const [gapsAnalyzed, setGapsAnalyzed] = useState(false);
   const [analyzingContradictions, setAnalyzingContradictions] = useState(false);
   const [analyzingGaps, setAnalyzingGaps] = useState(false);
+  const [activeFilter, setActiveFilter] = useState(null); // 'contradictions', 'gaps', or null for all
 
   const handleDetectContradictions = async () => {
+    console.log('🔍 Detect Contradictions button clicked');
+    console.log('📊 Extracted Data:', extractedData);
+    console.log('📋 Tables:', extractedData?.tables);
+
     setAnalyzingContradictions(true);
     try {
+      console.log('🚀 Sending request to /analyze/contradictions');
       const response = await fetch('http://localhost:8000/analyze/contradictions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tables: extractedData.tables })
       });
+      console.log('📡 Response received:', response.status);
       const data = await response.json();
+      console.log('📦 Response data:', data);
+
       if (data.success) {
+        console.log('✅ Contradictions found:', data.contradictions.length);
         setContradictions(data.contradictions);
         setContradictionsAnalyzed(true);
       } else {
+        console.error('❌ Analysis failed:', data.error);
         alert('Failed to detect contradictions: ' + data.error);
       }
     } catch (error) {
+      console.error('💥 Error:', error);
       alert('Error detecting contradictions: ' + error.message);
+    } finally {
+      setAnalyzingContradictions(false);
     }
-    setAnalyzingContradictions(false);
   };
 
   const handleFindGaps = async () => {
@@ -382,29 +395,61 @@ function App() {
         {/* Analysis Buttons */}
         {extractedData && !extracting && (
                             <div className="mt-8 flex gap-4 justify-center">
-                              <button 
-                                onClick={handleDetectContradictions}
-                                disabled={contradictionsAnalyzed || analyzingContradictions}
-                                className="bg-red-500 text-white px-6 py-3 rounded-lg disabled:bg-gray-400 flex items-center gap-2"
+                              <button
+                                onClick={() => {
+                                  if (contradictionsAnalyzed) {
+                                    // Toggle filter
+                                    setActiveFilter(activeFilter === 'contradictions' ? null : 'contradictions');
+                                  } else {
+                                    // Run analysis
+                                    handleDetectContradictions();
+                                  }
+                                }}
+                                disabled={analyzingContradictions}
+                                className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-all ${
+                                  contradictionsAnalyzed
+                                    ? activeFilter === 'contradictions'
+                                      ? 'bg-red-600 text-white ring-4 ring-red-300'
+                                      : 'bg-red-500 text-white hover:bg-red-600'
+                                    : analyzingContradictions
+                                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                                      : 'bg-red-500 text-white hover:bg-red-600'
+                                }`}
                               >
                                 {analyzingContradictions ? (
                                   <><Loader2 className="w-5 h-5 animate-spin" /> Analyzing...</>
                                 ) : contradictionsAnalyzed ? (
-                                  <>✓ Contradictions Analyzed</>
+                                  <>✓ Contradictions Analyzed {contradictions.length > 0 && `(${contradictions.length})`}</>
                                 ) : (
                                   <>Detect Contradictions</>
                                 )}
                               </button>
-                              
-                              <button 
-                                onClick={handleFindGaps}
-                                disabled={gapsAnalyzed || analyzingGaps}
-                                className="bg-yellow-500 text-white px-6 py-3 rounded-lg disabled:bg-gray-400 flex items-center gap-2"
+
+                              <button
+                                onClick={() => {
+                                  if (gapsAnalyzed) {
+                                    // Toggle filter
+                                    setActiveFilter(activeFilter === 'gaps' ? null : 'gaps');
+                                  } else {
+                                    // Run analysis
+                                    handleFindGaps();
+                                  }
+                                }}
+                                disabled={analyzingGaps}
+                                className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-all ${
+                                  gapsAnalyzed
+                                    ? activeFilter === 'gaps'
+                                      ? 'bg-yellow-600 text-white ring-4 ring-yellow-300'
+                                      : 'bg-yellow-500 text-white hover:bg-yellow-600'
+                                    : analyzingGaps
+                                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                                      : 'bg-yellow-500 text-white hover:bg-yellow-600'
+                                }`}
                               >
                                 {analyzingGaps ? (
                                   <><Loader2 className="w-5 h-5 animate-spin" /> Analyzing...</>
                                 ) : gapsAnalyzed ? (
-                                  <>✓ Gaps Analyzed</>
+                                  <>✓ Gaps Analyzed {gaps.length > 0 && `(${gaps.length})`}</>
                                 ) : (
                                   <>Find Gaps</>
                                 )}
@@ -415,16 +460,10 @@ function App() {
                   contradictions={contradictions}
                   gaps={gaps}
                   extractedData={extractedData}
+                  activeFilter={activeFilter}
                 />
           
-                {/* Footer */}        <div className="text-center mt-16">
-          <div className="inline-flex items-center gap-3 bg-white/70 backdrop-blur-md px-8 py-4 rounded-full shadow-xl border-2 border-gray-200">
-            <Sparkles className="w-5 h-5 text-purple-600" />
-            <p className="text-base font-semibold text-gray-800">
-              Powered by <span className="font-black bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">FastAPI</span>, <span className="font-black bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">React</span>, and <span className="font-black bg-gradient-to-r from-pink-600 to-indigo-600 bg-clip-text text-transparent">Claude AI</span>
-            </p>
-          </div>
-        </div>
+        
       </div>
     </div>
   );

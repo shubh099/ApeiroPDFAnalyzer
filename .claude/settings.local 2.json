@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create vite@latest frontend -- --template react)",
+      "Bash(npm install)",
+      "Bash(npm install -D tailwindcss postcss autoprefixer)",
+      "Bash(npm install lucide-react)",
+      "Bash(npx tailwindcss init -p)",
+      "Bash(./node_modules/.bin/tailwindcss init -p)",
+      "Bash(npm install -D @tailwindcss/postcss)",
+      "Bash(npm uninstall @tailwindcss/postcss)",
+      "Bash(npm install -D tailwindcss@^3.4.0 postcss autoprefixer)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

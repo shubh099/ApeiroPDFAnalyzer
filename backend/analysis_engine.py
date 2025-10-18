@@ -1,4 +1,26 @@
 from typing import List, Dict, Any
+import google.generativeai as genai
+import anthropic
+import httpx
+import os
+from dotenv import load_dotenv
+from pathlib import Path
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
+
+# Load environment variables
+load_dotenv(dotenv_path=Path('..') / '.env')
+
+# Configure Gemini API
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+def get_anthropic_client():
+    """Get Anthropic client for web search clarifications."""
+    # Create httpx client without proxies to avoid compatibility issues
+    http_client = httpx.Client()
+    return anthropic.Anthropic(
+        api_key=os.getenv("ANTHROPIC_API_KEY"),
+        http_client=http_client
+    )
 
 def build_service_registry(tables_data: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
     """
@@ -22,17 +44,7 @@ def build_service_registry(tables_data: List[Dict[str, Any]]) -> Dict[str, List[
             })
     return service_registry
 
-import anthropic
-import os
 import json
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-
-def get_anthropic_client():
-    """Get Anthropic client lazily to avoid import-time initialization issues."""
-    return anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 def format_instances_for_prompt(instances: List[Dict[str, Any]]) -> str:
     """Formats a list of service instances for inclusion in a prompt."""
@@ -73,14 +85,17 @@ Return ONLY a valid JSON object (no markdown, no explanation):
 If no contradiction exists, set has_contradiction to false and provide minimal other fields.
 """
 
-    client = get_anthropic_client()
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt}]
+    model = genai.GenerativeModel("models/gemini-2.5-pro")
+    response = model.generate_content(
+        prompt,
+        generation_config={
+            "temperature": 0.2,  # Slightly increased for more nuanced results
+            "max_output_tokens": 2000,
+            "response_mime_type": "application/json"
+        }
     )
 
-    return json.loads(response.content[0].text)
+    return json.loads(response.text)
 
 def detect_contradictions(tables_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -184,14 +199,17 @@ Return ONLY a valid JSON array (no markdown):
 Return empty array [] if no significant gaps found.
 """
 
-    client = get_anthropic_client()
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=3000,
-        messages=[{"role": "user", "content": prompt}]
+    model = genai.GenerativeModel("models/gemini-2.5-pro")
+    response = model.generate_content(
+        prompt,
+        generation_config={
+            "temperature": 0.2,  # Slightly increased for more nuanced results
+            "max_output_tokens": 3000,
+            "response_mime_type": "application/json"
+        }
     )
 
-    return json.loads(response.content[0].text)
+    return json.loads(response.text)
 
 def find_gaps(tables_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -212,8 +230,8 @@ def get_clarification(finding: Dict[str, Any], pdf_context: str) -> str:
 
     # The pdf_context is now the document_context extracted by Gemini
     system_context = pdf_context
-    
-    # Step 2: Construct prompt
+
+    # Construct prompt
     prompt = f"""You are helping clarify healthcare insurance policy issues.
 
 System Context: {system_context}
@@ -224,20 +242,23 @@ Finding Details:
 - Evidence: {finding['evidence']}
 - Impact: {finding['impact']}
 
-Task: 
+Task:
 1. Search for official guidelines, standards, or regulations related to this issue
 2. Prioritize official government health ministry sites, WHO guidelines, and healthcare standards
 3. Provide an INFORMATIVE clarification (not prescriptive - don't tell them what to do)
-4. Cite your sources
+4. Cite your sources with URLs when available
 
-Use web search to find relevant information. Return a clear, professional clarification that helps understand the issue better.
+Use web search to find relevant, up-to-date information. Return a clear, professional clarification that helps understand the issue better.
 """
 
     client = get_anthropic_client()
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
         max_tokens=2000,
-        tools=[{"type": "web_search"}],
+        tools=[{
+            "type": "web_search_20250305",
+            "name": "web_search"
+        }],
         messages=[{"role": "user", "content": prompt}]
     )
 
